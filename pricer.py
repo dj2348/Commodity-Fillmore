@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
+from scipy.interpolate import interp1d
+
 
 class monte_carlo_simulator:
     def __init__(self, model_params, cur_mkt_val, product_info, sim_info, model: str):
@@ -92,10 +94,18 @@ def energy_futures(history):
 def energy_euro_call(history, K, r, T):
     '''
     T: expiry
+    r: yield_curve
     Monthly Block Call Options: underlying is the futures and option expiry = futures delivery.. well it's the fucking spot
     '''
     length = history[0].shape[1]
     et, gt = history
 
-    return np.mean(np.maximum(np.sum(et[:, length-20:length], axis = 1) - K, 0))*np.exp(-r(T)*T), np.mean(np.maximum(np.sum(gt[:, length-20:length], axis = 1) - K, 0))*np.exp(-r(T)*T)
+    return np.mean(np.maximum(et[:,-20] - K, 0))*np.exp(-r(T-1/12)*(T-1/12) ), np.mean(np.maximum(gt[:, -20] - K, 0))*np.exp(-r(T)*T)
 
+def yield_curve(t):
+    '''
+    t: annualized maturity: 1mo = 1/12
+    '''
+    x = np.linspace(0,1,num = 13)
+    y = np.array([0, 0.0300, 0.0320, 0.0320, 0.0315, 0.0320, 0.0320, 0.0320, 0.0330, 0.0330, 0.0330, 0.0330, 0.0330])
+    return interp1d(x, y, kind='cubic')(np.array([t]))
