@@ -19,8 +19,8 @@ class monte_carlo_simulator:
         self._maturity = maturity
         self._sim_info = sim_info
     
-    def fourier_vol_sim(self):
-        def rolling_vol(i_day, mat, win_len, log_rv = True):
+    def fourier_vol_sim(self, use_fourier=False):
+        def rolling_vol(i_day, mat, win_len, log_rv=False):
             if i_day + 1 < win_len:
                 if log_rv:
                     return np.sqrt(
@@ -51,7 +51,11 @@ class monte_carlo_simulator:
 
         for i in range(n_steps):
             et[:, i + 1] = et[:, i] + alpha_e * (theta_e(i/240) - et[:, i]) * delta_t + rolling_vol(i, et, win_len, log_rv) * ( (et[:, i]-1)*log_rv + 1)* np.sqrt(delta_t) * Z1[:, i]
-            gt[:, i + 1] = gt[:, i] + alpha_g * (theta_g(i/240) - gt[:, i]) * delta_t + vol_g(i) * np.sqrt(delta_t) * B1[:, i]
+            if use_fourier:
+                gt[:, i + 1] = gt[:, i] + alpha_g * (theta_g(i/240) - gt[:, i]) * delta_t + vol_g(i) * np.sqrt(delta_t) * B1[:, i]
+            else:
+                gt[:, i + 1] = gt[:, i] + alpha_g * (theta_g(i / 240) - gt[:, i]) * delta_t + rolling_vol(i, gt, win_len, log_rv) * ((gt[:, i]-1)*log_rv + 1) * np.sqrt(
+                    delta_t) * B1[:, i]
             et[:, i + 1] = np.abs(et[:, i + 1])
             gt[:, i + 1] = np.abs(gt[:, i + 1])
         return et, gt
