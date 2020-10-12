@@ -57,18 +57,19 @@ time_shift = time - endtime
 def vol_g_fourier(x):
     fitted = 4
     for i in range(n):
-        fitted += 1 / n * np.cos(2*pi * (freq_[i]) * (x + midtime))
+        fitted += 1 / n * np.cos(2*pi * (freq_[i]) * (x/240 + midtime))
     return fitted
 
 
 if __name__ == '__main__':
     x = np.linspace(-endtime, 1, 1000)
+    x = np.arange(-500, 240)
     gas_hisvol_fitted = vol_g_fourier(x)
 
     fig = plt.figure()
     ax = fig.subplots(1)
     plt.plot(time_shift, np.array(gas_hisvol['Vol']))
-    plt.plot(x, gas_hisvol_fitted)
+    plt.plot(x/240, gas_hisvol_fitted)
     plt.show()
 
     print(0)

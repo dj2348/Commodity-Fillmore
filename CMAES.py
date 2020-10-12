@@ -2,7 +2,7 @@ import numpy as np
 from numpy import exp, sqrt, log, pi
 import pandas as pd
 import matplotlib.pyplot as plt
-import pricer_ as pr
+import pricer as pr
 from calibration import vol_g_fourier
 from scipy.interpolate import CubicSpline, interp1d
 
@@ -39,8 +39,8 @@ def loss_function(theta_e_grid, theta_g_grid):
     opt_g_true = np.array([0.39, 0.58, 0.73, 0.89, 1.07, 1.26,
                            1.33, 1.43, 1.58, 1.73, 1.77, 1.42])
 
-    mse = (fut_e - fut_e_true)**2 + (fut_g - fut_g_true)**2 + \
-          (opt_e - opt_e_true**2) + (opt_g - opt_g_true)**2
+    mse = ((fut_e - fut_e_true)**2 + (fut_g - fut_g_true)**2 + \
+          (opt_e - opt_e_true**2) + (opt_g - opt_g_true)**2)
 
     return mse
 
