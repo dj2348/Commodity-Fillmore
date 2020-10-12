@@ -8,7 +8,7 @@ class monte_carlo_simulator:
     def __init__(self, model_params, cur_mkt_val, maturity, sim_info):
         '''
         model_params: theta (array of func of t, days. [theta_e, theta_g]), rho, alpha(array of size 2,
-        [alpha_e, alpha_g]), vol, win_len
+        [alpha_e, alpha_g]), vol, win_len, log_rv
         cur_mkt_val: e0, g0
         maturity: T
         sim_info: num_sim, n_steps
@@ -20,16 +20,22 @@ class monte_carlo_simulator:
         self._sim_info = sim_info
     
     def fourier_vol_sim(self):
-        def rolling_vol(i_day, mat, win_len):
+        def rolling_vol(i_day, mat, win_len, log_rv = True):
             if i_day + 1 < win_len:
+                if log_rv:
+                    return np.sqrt(
+                    np.sum(np.diff(np.log(mat[:, 0:i_day]), axis=1) ** 2, axis=1) / (i_day + 1) * 250)  # Not sure here
                 return np.sqrt(
                     np.sum(np.diff(mat[:, 0:i_day], axis=1) ** 2, axis=1) / (i_day + 1) * 250)  # Not sure here
             else:
+                if log_rv:
+                    return np.sqrt(
+                    np.sum(np.diff(np.log(mat[:, i_day + 1 - win_len:i_day + 1]), axis=1) ** 2, axis=1) / win_len * 250)
                 return np.sqrt(
-                    np.sum(np.diff(mat[:, i_day + 1 - win_len:i_day + 1], axis=1) ** 2, axis=1) / (i_day + 1) * 250)
+                    np.sum(np.diff(mat[:, i_day + 1 - win_len:i_day + 1], axis=1) ** 2, axis=1) / win_len * 250)
 
         e0, g0 = self._cur_mkt_val
-        theta, rho, alpha, vol, win_len = self._model_params
+        theta, rho, alpha, vol, win_len, log_rv = self._model_params
         alpha_e, alpha_g = alpha
         theta_e, theta_g = theta
         vol_e, vol_g = vol
@@ -44,11 +50,8 @@ class monte_carlo_simulator:
         B1 = rho * Z1 + np.sqrt(1 - rho ** 2) * Z2
 
         for i in range(n_steps):
-            et[:, i + 1] = et[:, i] + alpha_e * (theta_e(i/240) - et[:, i]) * delta_t + rolling_vol(i, et,
-                                                                                                win_len) * np.sqrt(
-                delta_t) * Z1[:, i]
-            gt[:, i + 1] = gt[:, i] + alpha_g * (theta_g(i/240) - gt[:, i]) * delta_t + vol_g(i) * np.sqrt(
-                delta_t) * B1[:, i]
+            et[:, i + 1] = et[:, i] + alpha_e * (theta_e(i/240) - et[:, i]) * delta_t + rolling_vol(i, et, win_len, log_rv) * ( (et[:, i]-1)*log_rv + 1)* np.sqrt(delta_t) * Z1[:, i]
+            gt[:, i + 1] = gt[:, i] + alpha_g * (theta_g(i/240) - gt[:, i]) * delta_t + vol_g(i) * np.sqrt(delta_t) * B1[:, i]
 
         return et, gt
 
@@ -58,10 +61,10 @@ class monte_carlo_simulator:
             if i_day + 1 < win_len:
                 return np.sqrt(np.sum(np.diff(mat[:,0:i_day], axis = 1)**2, axis = 1)/(i_day + 1)* 250) # Not sure here
             else:
-                return np.sqrt(np.sum(np.diff(mat[:,i_day + 1 - win_len:i_day+1], axis = 1)**2, axis = 1)/(i_day + 1)* 250)
+                return np.sqrt(np.sum(np.diff(mat[:,i_day + 1 - win_len:i_day+1], axis = 1)**2, axis = 1)/(win_len)* 250)
 
         e0, g0 = self._cur_mkt_val
-        theta, rho, alpha, _, win_len = self._model_params
+        theta, rho, alpha, _, win_len, log_rv = self._model_params
         alpha_e, alpha_g = alpha
         theta_e, theta_g = theta
 

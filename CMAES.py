@@ -11,7 +11,7 @@ def loss_function(theta_e_grid, theta_g_grid):
     month_start = np.arange(0, 241)[::20] / 240
     theta_e = interp1d(month_start, theta_e_grid)
     theta_g = interp1d(month_start, theta_g_grid)
-    model_params = [np.array([theta_e, theta_g]), 0.9, np.array([5.2, 4.4]), (None, vol_g_fourier), 20]
+    model_params = [np.array([theta_e, theta_g]), 0.9, np.array([5.2, 4.4]), (None, vol_g_fourier), 20, True]
     cur_mkt_val = [82, 9.52]
     maturity = 1
     sim_info = [10000, 240]
