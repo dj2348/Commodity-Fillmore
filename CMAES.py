@@ -9,15 +9,15 @@ from scipy.interpolate import CubicSpline, interp1d
 def loss_function(theta_e_grid, theta_g_grid):
 
     month_start = np.arange(0, 241)[::20] / 240
-    theta_e = interp1d(month_start, theta_e_grid)
-    theta_g = interp1d(month_start, theta_g_grid)
+    theta_e = interp1d(month_start, theta_e_grid, kind='linear', fill_value='extrapolate')
+    theta_g = interp1d(month_start, theta_g_grid, kind='cubic', fill_value='extrapolate')
     model_params = [np.array([theta_e, theta_g]), 0.9, np.array([5.2, 4.4]), (None, vol_g_fourier), 20, True]
     cur_mkt_val = [82, 9.52]
-    maturity = 1
+    maturity = 1 + 1/12
     sim_info = [10000, 240]
     model = pr.monte_carlo_simulator(model_params, cur_mkt_val, maturity, sim_info)
     # history = model.rolling_vol_sim()
-    history = model.fourier_vol_sim()
+    history = model.fourier_vol_sim(use_fourier=True)
     fut_e, fut_g = pr.energy_futures(history)
     opt_e, opt_g = pr.energy_euro_call(history, [82, 9.52], pr.yield_curve)
 
@@ -47,33 +47,32 @@ theta_e_grid = np.array([82, 88.15, 98.35, 116, 124.4, 90.5, 86.25,
                            80.65, 86.05, 96, 97.2, 91.75, 80.8])
 theta_g_grid = np.array([9.52, 9.79, 9.88, 9.97, 10.03, 10.05, 10.12,
                            10.4, 10.75, 10.97, 10.95, 10.71, 9.75])
-loss_function(theta_e_grid, theta_g_grid)
 
 month_start = np.arange(0, 241)[::20] / 240
 discount_factors = np.exp(-month_start * pr.yield_curve(month_start))
 mu0 = np.append(theta_e_grid * discount_factors, theta_g_grid * discount_factors)
 
 
-
+''' 
 mu0 = np.array([96.00537041,  89.73251019,  96.64551107 ,103.19727224 , 94.79647121,
   80.5376809 , 100.47941732,  96.25538964,  97.27607636 ,100.45526759,
  103.42837099,  92.01313663 , 85.93537823,  10.01101213 ,  9.37272288,
   11.0204165 ,  10.65071141,  10.69538862,  12.07781968 , 10.38217413,
   12.64333106,   9.63889084,  13.94927749,   9.74786636,  14.10211372,
    6.38738668]) # 2.50
+'''
+mu0 = np.array([95.5236947 ,  89.78366771 , 96.12261782, 103.34125784,  94.74710928,
+  80.97943651, 100.1284283 ,  94.90594414,  97.82894813 ,100.4985351,
+ 103.81378475 , 90.95008292,  85.36549408 ,  9.66726308 ,  9.51380563,
+  11.13149721 , 10.12741581,  10.66032203 , 12.25803731 , 10.11406903,
+  12.66232517 ,  9.71162115,  14.05394954  , 9.74704256,  14.03629003,
+   6.46886351]) # 2.37
 
-mu0 = np.array([95.83188597 , 89.52322877,  96.23535376 ,103.68622991,  94.74347779,
-  80.87061074, 100.12586893 , 95.05843683 , 97.50977767, 100.53183771,
- 103.78609362 , 91.06323338 , 85.66108366,   9.88088164,   9.43856931,
-  11.15760079 , 10.28215342 , 10.77374094 , 12.19385296 , 10.12414565,
-  12.56397539 ,  9.74014395,  14.19064171 ,  9.65391883,  14.04507865,
-   6.28539411]) # 2.37
-
-sig0 = np.eye(26) * np.diag(np.append(np.linspace(4, 4, 13), np.linspace(4, 4, 13) / 8)) / 10
+sig0 = np.eye(26) * np.diag(np.append(np.linspace(4, 4, 13), np.linspace(4, 4, 13) / 8)) / 15 * 0
 
 n_iter = 10000
-lam = 500           # num of new points
-k = 5              # num of elites
+lam = 200           # num of new points
+k = 2              # num of elites
 # start algo
 elite_losses = []
 mu, sig = mu0, sig0
@@ -107,7 +106,7 @@ for i in range(n_iter):
         if elite_losses[-1] - np.min(elite_losses) > 1 * 10**(-3):      # if error become larger, does not change
             mu = mu_prev
             sig = sig_prev
-        elif np.abs(elite_losses[-1] - elite_losses[-2]) < 5 * 10**(-3):    # if little improvement, reset sig
+        elif np.abs(elite_losses[-1] - elite_losses[-2]) < 1 * 10**(-3):    # if little improvement, reset sig
             sig0 = sig0 / 2
             sig = sig0
             print('Reset covariance')
