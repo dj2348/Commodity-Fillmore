@@ -7,7 +7,8 @@ from scipy.interpolate import interp1d
 class monte_carlo_simulator:
     def __init__(self, model_params, cur_mkt_val, maturity, sim_info):
         '''
-        model_params: theta (array of func of t, days. [theta_e, theta_g]), rho, alpha(array of size 2, [alpha_e, alpha_g]), vol, win_len
+        model_params: theta (array of func of t, days. [theta_e, theta_g]), rho, alpha(array of size 2,
+        [alpha_e, alpha_g]), vol, win_len
         cur_mkt_val: e0, g0
         maturity: T
         sim_info: num_sim, n_steps
@@ -19,26 +20,41 @@ class monte_carlo_simulator:
         self._sim_info = sim_info
     
     def fourier_vol_sim(self):
+        def rolling_vol(i_day, mat, win_len):
+            if i_day + 1 < win_len:
+                return np.sqrt(
+                    np.sum(np.diff(mat[:, 0:i_day], axis=1) ** 2, axis=1) / (i_day + 1) * 250)  # Not sure here
+            else:
+                return np.sqrt(
+                    np.sum(np.diff(mat[:, i_day + 1 - win_len:i_day + 1], axis=1) ** 2, axis=1) / (i_day + 1) * 250)
+
         e0, g0 = self._cur_mkt_val
-        theta, rho, alpha, vol, _ = self._model_params
+        theta, rho, alpha, vol, win_len = self._model_params
         alpha_e, alpha_g = alpha
         theta_e, theta_g = theta
         vol_e, vol_g = vol
 
         T = self._maturity
         num_sim, n_steps = self._sim_info
-        delta_t = T/n_steps
-        et = np.ones((num_sim, n_steps+1))*e0
-        gt = np.ones((num_sim, n_steps+1))*g0
-        Z1 = norm.rvs(size = num_sim*n_steps).reshape(num_sim, n_steps)
-        Z2 = norm.rvs(size = num_sim*n_steps).reshape(num_sim, n_steps)
-        B1 = rho * Z1 + np.sqrt(1 - rho**2) * Z2
-       
+        delta_t = T / n_steps
+        et = np.ones((num_sim, n_steps + 1)) * e0
+        gt = np.ones((num_sim, n_steps + 1)) * g0
+        Z1 = norm.rvs(size=num_sim * n_steps).reshape(num_sim, n_steps)
+        Z2 = norm.rvs(size=num_sim * n_steps).reshape(num_sim, n_steps)
+        B1 = rho * Z1 + np.sqrt(1 - rho ** 2) * Z2
+
         for i in range(n_steps):
-            et[:,i+1] = et[:,i] + alpha_e * (theta_e(i) - et[:,i])*delta_t + vol_e(i/252)*np.sqrt(delta_t)*Z1[:,i]
-            gt[:,i+1] = gt[:,i] + alpha_g * (theta_g(i) - gt[:,i])*delta_t + vol_g(i/252)*np.sqrt(delta_t)*B1[:,i]
+            et[:, i + 1] = et[:, i] + alpha_e * (theta_e(i) - et[:, i]) * delta_t + rolling_vol(i, et,
+                                                                                                win_len) * np.sqrt(
+                delta_t) * Z1[:, i]
+            gt[:, i + 1] = gt[:, i] + alpha_g * (theta_g(i) - gt[:, i]) * delta_t + vol_g(i) * np.sqrt(
+                delta_t) * B1[:, i]
 
         return et, gt
+
+
+
+
  
     def rolling_vol_sim(self):
         def rolling_vol(i_day, mat, win_len):
@@ -95,7 +111,7 @@ def energy_futures(history):
 
 
 
-def energy_euro_call(history, K, r, T):
+def energy_euro_call(history, K, r):
     '''
     T: expiry
     r: yield_curve

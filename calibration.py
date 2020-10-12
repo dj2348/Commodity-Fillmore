@@ -3,7 +3,7 @@ from numpy import exp, sqrt, log, pi
 from numpy.fft import fft
 import pandas as pd
 import matplotlib.pyplot as plt
-from scipy.interpolate import CubicSpline, interp1d
+
 
 lam_gas = 4.4
 span = 120
@@ -32,7 +32,7 @@ for i in range(span, gas_hisret.shape[0]):
     gas_hisvol.iloc[i] = np.sqrt(tmp)
 gas_hisvol = gas_hisvol.dropna()
 
-print(gas_hisvol)
+#print(gas_hisvol)
 #gas_hisvol.plot()
 
 y = np.fft.fft(gas_hisvol)
@@ -54,24 +54,22 @@ time = np.linspace(0, len(gas_hisvol)/365, len(gas_hisvol))
 midtime = np.median(time)
 endtime = time.max()
 time_shift = time - endtime
-def volatility(x):
+def vol_g_fourier(x):
     fitted = 4
     for i in range(n):
         fitted += 1 / n * np.cos(2*pi * (freq_[i]) * (x + midtime))
     return fitted
 
 
-x = np.linspace(-endtime, 1, 1000)
-gas_hisvol_fitted = volatility(x)
+if __name__ == '__main__':
+    x = np.linspace(-endtime, 1, 1000)
+    gas_hisvol_fitted = vol_g_fourier(x)
 
+    fig = plt.figure()
+    ax = fig.subplots(1)
+    plt.plot(time_shift, np.array(gas_hisvol['Vol']))
+    plt.plot(x, gas_hisvol_fitted)
+    plt.show()
 
-fig = plt.figure()
-ax = fig.subplots(1)
-plt.plot(time_shift, np.array(gas_hisvol['Vol']))
-plt.plot(x, gas_hisvol_fitted)
-plt.show()
-
-
-
-print(0)
+    print(0)
 
