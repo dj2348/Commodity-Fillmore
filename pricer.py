@@ -101,8 +101,8 @@ def energy_futures(history):
     et_lst = np.zeros(12)
     gt_lst = np.zeros(12)
     for i in range(12):
-        et_lst[i] = np.mean(np.sum(et[:,  i*20:(i+1)*20+1], axis = 1))
-        gt_lst[i] = np.mean(np.sum(gt[:,  i*20:(i+1)*20+1], axis = 1))
+        et_lst[i] = np.mean(np.mean(et[:,  i*20:(i+1)*20+1], axis = 1))
+        gt_lst[i] = np.mean(np.mean(gt[:,  i*20:(i+1)*20+1], axis = 1))
     return et_lst, gt_lst
 
 
