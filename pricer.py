@@ -112,7 +112,7 @@ def energy_euro_call(history, K, r):
     '''
     T: expiry
     r: yield_curve
-    K: [Ke, Kg]
+    K: [Ke, Kg] can just input the spot, translation to forward is conducted within the function
     Monthly Block Call Options: underlying is the futures and option expiry = futures delivery.. well it's the fucking spot
     '''
     et, gt = history
@@ -121,8 +121,8 @@ def energy_euro_call(history, K, r):
     gt_lst = np.zeros(12)
     for i in range(12):
         tau = ((i+1)*20)/240
-        et_lst[i] = np.mean(np.maximum(et[:,(i+1)*20] - ke, 0))*np.exp(-r(tau)*tau)
-        gt_lst[i] = np.mean(np.maximum(gt[:,(i+1)*20] - kg, 0))*np.exp(-r(tau)*tau)
+        et_lst[i] = np.mean(np.maximum(et[:,(i+1)*20] - ke*np.exp(r(tau)*tau), 0))*np.exp(-r(tau)*tau)
+        gt_lst[i] = np.mean(np.maximum(gt[:,(i+1)*20] - kg*np.exp(r(tau)*tau), 0))*np.exp(-r(tau)*tau)
     return et_lst, gt_lst
 
 def yield_curve(t):
