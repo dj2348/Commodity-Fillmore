@@ -102,9 +102,9 @@ def energy_futures(history):
     Monthly Block Futures Contract：payoff is the expected value of monthly block spot price
     '''
     et, gt = history
-    et_lst = np.zeros(12)
-    gt_lst = np.zeros(12)
-    for i in range(12):
+    et_lst = np.zeros(13)
+    gt_lst = np.zeros(13)
+    for i in range(13):
         et_lst[i] = np.mean(np.mean(et[:,  i*20:(i+1)*20+1], axis = 1))
         gt_lst[i] = np.mean(np.mean(gt[:,  i*20:(i+1)*20+1], axis = 1))
     return et_lst, gt_lst
