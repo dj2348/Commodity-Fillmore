@@ -5,28 +5,27 @@ from scipy.interpolate import interp1d
 
 
 class monte_carlo_simulator:
-    def __init__(self, model_params, cur_mkt_val, product_info, sim_info, model: str):
+    def __init__(self, model_params, cur_mkt_val, maturity, sim_info):
         '''
-        model: Fourier or Rolling
         model_params: theta (array of func of t, days. [theta_e, theta_g]), rho, alpha(array of size 2, [alpha_e, alpha_g]), vol, win_len
         cur_mkt_val: e0, g0
-        product_info: T, K, payoff (defined as func of history and K)
+        maturity: T
         sim_info: num_sim, n_steps
         '''
-        self._model = model
+
         self._model_params = model_params
         self._cur_mkt_val = cur_mkt_val
-        self._product_info = product_info
+        self._maturity = maturity
         self._sim_info = sim_info
     
-    def _fourier_vol_sim(self):
-        e0, g0, _ = self._cur_mkt_val
+    def fourier_vol_sim(self):
+        e0, g0 = self._cur_mkt_val
         theta, rho, alpha, vol, _ = self._model_params
         alpha_e, alpha_g = alpha
         theta_e, theta_g = theta
         vol_e, vol_g = vol
 
-        T, _, _ = self._product_info
+        T = self._maturity
         num_sim, n_steps = self._sim_info
         delta_t = T/n_steps
         et = np.ones((num_sim, n_steps+1))*e0
@@ -37,23 +36,23 @@ class monte_carlo_simulator:
        
         for i in range(n_steps):
             et[:,i+1] = et[:,i] + alpha_e * (theta_e(i) - et[:,i])*delta_t + vol_e(i/252)*np.sqrt(delta_t)*Z1[:,i]
-            gt[:,i+1] = gt[:,i] - alpha_g * (theta_g(i) - gt[:,i])*delta_t + vol_g(i/252)*np.sqrt(delta_t)*B1[:,i]
+            gt[:,i+1] = gt[:,i] + alpha_g * (theta_g(i) - gt[:,i])*delta_t + vol_g(i/252)*np.sqrt(delta_t)*B1[:,i]
 
         return et, gt
  
-    def _rolling_vol_sim(self):
+    def rolling_vol_sim(self):
         def rolling_vol(i_day, mat, win_len):
             if i_day + 1 < win_len:
                 return np.sqrt(np.sum(np.diff(mat[:,0:i_day], axis = 1)**2, axis = 1)/(i_day + 1)* 250) # Not sure here
             else:
                 return np.sqrt(np.sum(np.diff(mat[:,i_day + 1 - win_len:i_day+1], axis = 1)**2, axis = 1)/(i_day + 1)* 250)
 
-        e0, g0, _ = self._cur_mkt_val
+        e0, g0 = self._cur_mkt_val
         theta, rho, alpha, _, win_len = self._model_params
         alpha_e, alpha_g = alpha
         theta_e, theta_g = theta
 
-        T, _, _ = self._product_info
+        T = self._maturity
         num_sim, n_steps = self._sim_info
         delta_t = T/n_steps
         et = np.ones((num_sim, n_steps+1))*e0
@@ -64,7 +63,7 @@ class monte_carlo_simulator:
        
         for i in range(n_steps):
             et[:,i+1] = et[:,i] + alpha_e * (theta_e(i) - et[:,i])*delta_t + rolling_vol(i, et, win_len)*np.sqrt(delta_t)*Z1[:,i]
-            gt[:,i+1] = gt[:,i] - alpha_g * (theta_g(i) - gt[:,i])*delta_t + rolling_vol(i, gt, win_len)*np.sqrt(delta_t)*B1[:,i]
+            gt[:,i+1] = gt[:,i] + alpha_g * (theta_g(i) - gt[:,i])*delta_t + rolling_vol(i, gt, win_len)*np.sqrt(delta_t)*B1[:,i]
 
         return et, gt
     
@@ -83,10 +82,15 @@ class monte_carlo_simulator:
 
 def energy_futures(history):
     '''
-    Monthly Block Futures Contract：payoff is the aggregate of daily pnl defined by (spot - delivery price)
+    Monthly Block Futures Contract：payoff is the expected value of monthly block spot price
     '''
-    length = history[0].shape[1]
-    return np.mean(np.sum(history[0][:, length-20:length], axis = 1)), np.mean(np.sum(history[1][:, length-20:length], axis = 1))
+    et, gt = history
+    et_lst = np.zeros(12)
+    gt_lst = np.zeros(12)
+    for i in range(12):
+        et_lst[i] = np.mean(np.sum(et[:,  i*20:(i+1)*20+1], axis = 1))
+        gt_lst[i] = np.mean(np.sum(gt[:,  i*20:(i+1)*20+1], axis = 1))
+    return et_lst, gt_lst
 
 
 
@@ -95,12 +99,18 @@ def energy_euro_call(history, K, r, T):
     '''
     T: expiry
     r: yield_curve
+    K: [Ke, Kg]
     Monthly Block Call Options: underlying is the futures and option expiry = futures delivery.. well it's the fucking spot
     '''
-    length = history[0].shape[1]
     et, gt = history
-
-    return np.mean(np.maximum(et[:,-20] - K, 0))*np.exp(-r(T-1/12)*(T-1/12) ), np.mean(np.maximum(gt[:, -20] - K, 0))*np.exp(-r(T)*T)
+    ke, kg = K
+    et_lst = np.zeros(12)
+    gt_lst = np.zeros(12)
+    for i in range(12):
+        tau = ((i+1)*20)/240
+        et_lst[i] = np.mean(np.maximum(et[:,(i+1)*20] - ke, 0))*np.exp(-r(tau)*tau)
+        gt_lst[i] = np.mean(np.maximum(gt[:,(i+1)*20] - kg, 0))*np.exp(-r(tau)*tau)
+    return et_lst, gt_lst
 
 def yield_curve(t):
     '''
@@ -108,4 +118,4 @@ def yield_curve(t):
     '''
     x = np.linspace(0,1,num = 13)
     y = np.array([0, 0.0300, 0.0320, 0.0320, 0.0315, 0.0320, 0.0320, 0.0320, 0.0330, 0.0330, 0.0330, 0.0330, 0.0330])
-    return interp1d(x, y, kind='cubic')(np.array([t]))
+    return interp1d(x, y, kind='cubic')(np.array([t]))[0]
