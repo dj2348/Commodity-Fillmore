@@ -35,8 +35,8 @@ class monte_carlo_simulator:
         B1 = rho * Z1 + np.sqrt(1 - rho**2) * Z2
        
         for i in range(n_steps):
-            et[:,i+1] = et[:,i] + alpha_e * (theta_e(i) - et[:,i])*delta_t + vol_e(i/252)*np.sqrt(delta_t)*Z1[:,i]
-            gt[:,i+1] = gt[:,i] + alpha_g * (theta_g(i) - gt[:,i])*delta_t + vol_g(i/252)*np.sqrt(delta_t)*B1[:,i]
+            et[:,i+1] = et[:,i] + alpha_e * (theta_e(i/240) - et[:,i])*delta_t + vol_e(i/240)*np.sqrt(delta_t)*Z1[:,i]
+            gt[:,i+1] = gt[:,i] + alpha_g * (theta_g(i/240) - gt[:,i])*delta_t + vol_g(i/240)*np.sqrt(delta_t)*B1[:,i]
 
         return et, gt
  
@@ -62,8 +62,8 @@ class monte_carlo_simulator:
         B1 = rho * Z1 + np.sqrt(1 - rho**2) * Z2
        
         for i in range(n_steps):
-            et[:,i+1] = et[:,i] + alpha_e * (theta_e(i) - et[:,i])*delta_t + rolling_vol(i, et, win_len)*np.sqrt(delta_t)*Z1[:,i]
-            gt[:,i+1] = gt[:,i] + alpha_g * (theta_g(i) - gt[:,i])*delta_t + rolling_vol(i, gt, win_len)*np.sqrt(delta_t)*B1[:,i]
+            et[:,i+1] = et[:,i] + alpha_e * (theta_e(i/240) - et[:,i])*delta_t + rolling_vol(i, et, win_len)*np.sqrt(delta_t)*Z1[:,i]
+            gt[:,i+1] = gt[:,i] + alpha_g * (theta_g(i/240) - gt[:,i])*delta_t + rolling_vol(i, gt, win_len)*np.sqrt(delta_t)*B1[:,i]
 
         return et, gt
     
