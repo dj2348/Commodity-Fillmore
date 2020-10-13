@@ -35,8 +35,9 @@ class monte_carlo_simulator:
                     np.sum(np.diff(mat[:, i_day + 1 - win_len:i_day + 1], axis=1) ** 2, axis=1) / win_len * 250)
 
         e0, g0 = self._cur_mkt_val
-        theta, rho, alpha, vol, win_len, log_rv = self._model_params
-        alpha_e, alpha_g = alpha
+        theta, vol, win_len, log_rv = self._model_params
+        alpha_e, alpha_g = 5.2, 4.4
+        rho = 0.9
         theta_e, theta_g = theta
         vol_e, vol_g = vol
 
@@ -52,7 +53,7 @@ class monte_carlo_simulator:
         for i in range(n_steps):
             et[:, i + 1] = et[:, i] + alpha_e * (theta_e(i/240) - et[:, i]) * delta_t + rolling_vol(i, et, win_len, log_rv) * ( (et[:, i]-1)*log_rv + 1)* np.sqrt(delta_t) * Z1[:, i]
             if use_fourier:
-                gt[:, i + 1] = gt[:, i] + alpha_g * (theta_g(i/240) - gt[:, i]) * delta_t + vol_g(i) * np.sqrt(delta_t) * B1[:, i]
+                gt[:, i + 1] = gt[:, i] + alpha_g * (theta_g(i/240) - gt[:, i]) * delta_t + vol_g(i/240) * np.sqrt(delta_t) * B1[:, i]
             else:
                 gt[:, i + 1] = gt[:, i] + alpha_g * (theta_g(i / 240) - gt[:, i]) * delta_t + rolling_vol(i, gt, win_len, log_rv) * ((gt[:, i]-1)*log_rv + 1) * np.sqrt(
                     delta_t) * B1[:, i]
@@ -137,6 +138,6 @@ def yield_curve(t):
     '''
     t: annualized maturity: 1mo = 1/12
     '''
-    x = np.linspace(0,1,num = 13)
-    y = np.array([0, 0.0300, 0.0320, 0.0320, 0.0315, 0.0320, 0.0320, 0.0320, 0.0330, 0.0330, 0.0330, 0.0330, 0.0330])
+    x = np.linspace(0,1+1/12,num=14)
+    y = np.array([0, 0.0300, 0.0320, 0.0320, 0.0315, 0.0320, 0.0320, 0.0320, 0.0330, 0.0330, 0.0330, 0.0330, 0.0330, 0.330])
     return interp1d(x, y, kind='cubic')(np.array([t]))[0]
