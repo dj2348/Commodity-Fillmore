@@ -3,7 +3,7 @@ from numpy import exp, sqrt, log, pi
 import pandas as pd
 import matplotlib.pyplot as plt
 import pricer as pr
-from fourierVol import VolGFourier
+from pricer import VolGFourier
 from scipy.interpolate import CubicSpline, interp1d
 
 vol_g_fourier = VolGFourier()
@@ -15,12 +15,12 @@ def loss_function(theta_e_grid, theta_g_grid):
     model_params = [np.array([theta_e, theta_g]), (None, vol_g_fourier), 20, True]
     cur_mkt_val = [82, 9.52]
     maturity = 1 + 1/12
-    sim_info = [10000, 260]
-    model = pr.monte_carlo_simulator(model_params, cur_mkt_val, maturity, sim_info)
+    num_sim = 10000
+    model = pr.MonteCarloSimulator(model_params, cur_mkt_val, maturity)
     # history = model.rolling_vol_sim()
-    history = model.fourier_vol_sim(use_fourier=True)
-    fut_e, fut_g = pr.energy_futures(history)
-    opt_e, opt_g = pr.energy_euro_call(history, [82, 9.52], pr.yield_curve)
+    history = model.sim_path(num_sim=num_sim, use_fourier=True)
+    fut_e, fut_g = pr.futures(history)
+    opt_e, opt_g = pr.euro_call(history, [82, 9.52], pr.yield_curve)
 
     fut_e_true = np.array([82, 88.15, 98.35, 116, 124.4, 90.5, 86.25,
                            80.65, 86.05, 96, 97.2, 91.75, 80.8])
@@ -64,26 +64,29 @@ mu0 = np.array([95.77624878,  89.33899388,  94.97090706, 103.38369855,  94.94380
   10.25351524 , 12.55570602,   9.92906091 , 14.01353142 ,  9.30671949,
   14.28954042 ,  6.77069735 ,  6.87730178])
 
-mu0 = np.array([96.03099537,  88.96756393,  95.15456025, 103.43338149,  94.66244055,
-  81.28469814,  99.4890207 ,  94.22996031,  98.77832987 , 98.45671238,
- 103.33602985,  91.78342438,  83.64211702 , 79.62639204 ,  9.52345856,
-   9.74838331,  10.78937404 , 10.51459812,  10.83462434, 11.68384713,
-  10.1475244 ,  12.73082681,  10.1454398,   13.61106297 ,  9.52353396,
-  14.07108164 ,  6.91007521,   6.64479901])
+mu0 = np.array([ 95.76548346,  89.52283876 , 95.39370618 ,104.46874004,  94.85219326,
+  80.91702108, 100.14572397,  93.69413934 ,100.28669654, 100.03896433,
+ 100.38118939,  96.23868527,  79.39360372,  77.12375787,   9.45413416,
+   9.93164886,  10.65490518,  10.58251927 , 10.78890507 , 11.86661794,
+  10.27026288,  12.79479409,   9.77392006 , 13.9066902  ,  9.81835234,
+  13.78518266,   6.97277494,   6.98612126])  # 2.147
 
 sig0 = np.eye(28) * np.diag(np.append(np.linspace(4, 4, 14), np.linspace(4, 4, 14) / 8)) / 5
 sig0 = np.eye(28) * np.diag(np.append(
-                                np.array([0, 0, 0, 4, 4, 0, 0,
-                                          0, 0, 0, 0, 0, 0, 0]),
-                                np.linspace(4, 4, 14) / 8
-                                )) / 5
+                                np.array([0, 0, 0, 0, 0, 0, 0,
+                                          0, 0, 4, 4, 4, 4, 4]),
+                                np.array([0, 0, 0, 4, 4, 4, 4,
+                                          0, 0, 0, 0, 0, 0, 0]) / 8
+                                ))
 
 n_iter = 10000
-lam = 200           # num of new points
+lam = 300           # num of new points
 k = 10             # num of elites
 # start algo
 elite_losses = []
 mu, sig = mu0, sig0
+cur_group_vol = 0
+local_times = 0
 for i in range(n_iter):
     mu_prev, sig_prev = mu, sig
     new_set = np.random.multivariate_normal(mu, sig, lam)
@@ -111,18 +114,29 @@ for i in range(n_iter):
             file1.write(' '.join([str(_) for _ in mu]))
             file1.write('\n')
     if i >= 1:
-        if elite_losses[-1] - np.min(elite_losses) > 1 * 10**(-3):      # if error become larger, does not change
-            mu = mu_prev
-            sig = sig_prev
-        elif np.abs(elite_losses[-1] - elite_losses[-2]) < 1 * 10**(-3):    # if little improvement, reset sig
-            sig0 = sig0 / 2
-            sig = sig0
-            print('Reset covariance')
+        if np.abs(elite_losses[-1] - elite_losses[-2]) < 0.5 * 10**(-3)\
+                or local_times > 4:    # if little improvement, reset sig
+            # the goal is to consider different param seperately
+            if local_times > 4:
+                local_times = 0
+            sig = np.zeros(28)
+            cur_group_vol += 1
+            cur_group_vol = cur_group_vol % 7
+            sig[2*cur_group_vol: 2*cur_group_vol+1] = 1
+            sig[14+2*cur_group_vol: 14+2*cur_group_vol+1] = 1 / 8
+            sig = np.eye(28) * np.diag(sig) / 5
+            print('Reset covariance', cur_group_vol)
             print(mu)
             with open("caliblog.txt", 'a') as file1:
-                file1.write('Reset covariance')
+                file1.write('Reset covariance ' + str(cur_group_vol))
                 file1.write(' '.join([str(_) for _ in mu]))
                 file1.write('\n')
+
+        elif elite_losses[-1] - np.min(elite_losses) > 1 * 10**(-3):      # if error become larger, does not change
+            mu = mu_prev
+            sig = sig_prev
+            local_times += 1    # make sure that we will not always dwell here
+
         else:
             print(mu)
             with open("caliblog.txt", 'a') as file1:
