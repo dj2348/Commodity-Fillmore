@@ -51,7 +51,11 @@ class DispatchSimulator:
 		self.cost_share_ratio = 0.5
 
 		self.count_days = 240 # Subject to change
+
+		self.fixpayment = 367957.6702 
 		
+		self.multiplier = 0.75
+
 	def sparkspread(self, n):
 		'''
 		return spark spread path
@@ -78,6 +82,9 @@ class DispatchSimulator:
 		gas_list = []
 		gas_undist_list = []
 
+		swap_matrix = np.array([[0 for i in range(240)] for n in range(len(path))])
+		swap_undist_matrix = np.array([[0 for i in range(240)] for n in range(len(path))])
+
 		for n in range(len(path)):
 			path_cashflow = 0
 			path_undist_cashflow = 0
@@ -88,15 +95,17 @@ class DispatchSimulator:
 			gas_cashflow = 0
 			gas_undist_cashflow = 0
 
-			state = 1
+			state = self.multiplier
 			wait = 0
 			restart = [0, 0]
 
 			count = 0
 
-			for i in range(20, len(path[n])):
 
-				if state == 1:
+
+			for i in range(21, len(path[n])):
+
+				if state == self.multiplier:
 					count += 1
 
 				if count <= self.count_days:
@@ -107,6 +116,10 @@ class DispatchSimulator:
 					variable_cost = state * (restart[0] * 5 + 2)
 					power_comp = state * (power_path[n][i] - (1 - self.cost_share_ratio) * variable_cost) * self.capacity * 16
 					gas_comp = state * (- self.heatrate * gas_path[n][i] - self.cost_share_ratio * variable_cost) * self.capacity * 16  
+
+					swap_value = self.fixpayment - gas_comp
+					swap_matrix[n][i - 21] = swap_value * exp(-discount * i/240)
+					swap_undist_matrix[n][i - 21] = swap_value
 
 					path_cashflow += undiscount_cf * exp(-discount * i/240)
 					path_undist_cashflow += undiscount_cf
@@ -120,7 +133,7 @@ class DispatchSimulator:
 
 					if verbose:
 						print('Current count: ', count)
-						print('Current days passed: ', i - 20)
+						print('Current days passed: ', i - 21)
 						print('Spread today: ', spread)
 						print('On or off: ', state)
 						print('Restart: ', restart)
@@ -139,7 +152,7 @@ class DispatchSimulator:
 						if restart[1] == 0:
 							restart = [0, 0]
 
-					if state == 1 and spread <= self.threshold_off:
+					if state == self.multiplier and spread <= self.threshold_off:
 						# Turn off the plant
 						state = 0
 						wait = 6
@@ -147,7 +160,7 @@ class DispatchSimulator:
 
 					if state == 0 and wait == 0 and spread >= self.threshold_on:
 						# Turn on the plant
-						state = 1
+						state = self.multiplier
 						restart = [1, 5]
 
 			cashflow_list.append(path_cashflow)
@@ -161,7 +174,8 @@ class DispatchSimulator:
 			
 		return (cashflow_list, undiscount_list, 
 				power_list, power_undist_list, 
-				gas_list, gas_undist_list)
+				gas_list, gas_undist_list,
+				swap_matrix, swap_undist_matrix)
 	
 	def value(self, n):
 		'''
@@ -171,7 +185,7 @@ class DispatchSimulator:
 		n: number of path used in valuation
 		'''
 
-		result, _, power, _, gas, _  = self.dispatch(n)		
+		result, _, power, _, gas, _, _, _  = self.dispatch(n)		
 		discount = [exp(-(self.r(i/240) + self.OAS_l) * i/240) for i in range(240)]
 		fix_payment = np.mean(gas) / np.sum(discount)
 		fix_payment_std = np.std(gas) / np.sqrt(n) / np.sum(discount)
