@@ -172,7 +172,7 @@ class DispatchSimulator:
 		'''
 
 		result, _, power, _, gas, _  = self.dispatch(n)		
-		discount = [exp(-(self.r(i/240) + 0.02) * i/240) for i in range(240)]
+		discount = [exp(-(self.r(i/240) + self.OAS_l) * i/240) for i in range(240)]
 		fix_payment = np.mean(gas) / np.sum(discount)
 		fix_payment_std = np.std(gas) / np.sqrt(n) / np.sum(discount)
 
