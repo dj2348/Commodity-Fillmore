@@ -7,7 +7,7 @@ from pricer import *
 
 
 class DispatchSimulator:
-	def __init__(self, threshold_on=4, threshold_off=0):
+	def __init__(self, threshold_on=4, threshold_off=0, verbose=False):
 		'''
 		threshold_on: threshold for operating (from off to on), measured by spark spread
 		threshold_off: threshold for not operating (from on to off), measured by spark spread
@@ -23,7 +23,12 @@ class DispatchSimulator:
 		
 		r: yield for RN dynamics, same as the objective dynamics
 		path: path generator
+		cost_share_ratio: variable cost share ratio
+		count_days: maximum number of day for gas delivering
+
 		'''
+		self.verbose = verbose
+
 		self.threshold_on = threshold_on
 		self.threshold_off = threshold_off
 		
@@ -44,6 +49,8 @@ class DispatchSimulator:
 		self.path = PathGenerator()
 
 		self.cost_share_ratio = 0.5
+
+		self.count_days = 240 # Subject to change
 		
 	def sparkspread(self, n):
 		'''
@@ -52,13 +59,15 @@ class DispatchSimulator:
 		power, gas = self.path.getPath(n)    
 		return power - self.heatrate * gas, power, gas
 		
-	def dispatch(self, n, verbose=False):
+	def dispatch(self, n):
 		'''
 		state: bool, 1 - Power station is on, 0 - Power station is off
 		wait: Number of days that still need to be wait to turn on the power station
 		restart: [bool, number of days left in restart priod]
 				1 - Power station is in the five-day restart period, 0 - not
 		'''
+		verbose = self.verbose
+
 		path, power_path, gas_path = self.sparkspread(n)
 		cashflow_list = []
 		undiscount_list = []
@@ -83,54 +92,63 @@ class DispatchSimulator:
 			wait = 0
 			restart = [0, 0]
 
+			count = 0
+
 			for i in range(20, len(path[n])):
-				spread = path[n][i]
-				discount = self.r(i/240) + self.OAS_l
 
-				undiscount_cf = state * (spread - restart[0] * 5 - 2) * self.capacity * 16
-				variable_cost = state * (restart[0] * 5 + 2)
-				power_comp = state * (power_path[n][i] - (1 - self.cost_share_ratio) * variable_cost) * self.capacity * 16
-				gas_comp = state * (- self.heatrate * gas_path[n][i] - self.cost_share_ratio * variable_cost) * self.capacity * 16  
+				if state == 1:
+					count += 1
 
-				path_cashflow += undiscount_cf * exp(-discount * i/240)
-				path_undist_cashflow += undiscount_cf
+				if count <= self.count_days:
+					spread = path[n][i]
+					discount = self.r(i/240) + self.OAS_l
 
-				power_cashflow += power_comp * exp(-discount * i/240)
-				power_undist_cashflow += power_comp
+					undiscount_cf = state * (spread - restart[0] * 5 - 2) * self.capacity * 16
+					variable_cost = state * (restart[0] * 5 + 2)
+					power_comp = state * (power_path[n][i] - (1 - self.cost_share_ratio) * variable_cost) * self.capacity * 16
+					gas_comp = state * (- self.heatrate * gas_path[n][i] - self.cost_share_ratio * variable_cost) * self.capacity * 16  
 
-				gas_cashflow += gas_comp * exp(-discount * i/240)
-				gas_undist_cashflow += gas_comp
+					path_cashflow += undiscount_cf * exp(-discount * i/240)
+					path_undist_cashflow += undiscount_cf
+
+					power_cashflow += power_comp * exp(-discount * i/240)
+					power_undist_cashflow += power_comp
+
+					gas_cashflow += gas_comp * exp(-discount * i/240)
+					gas_undist_cashflow += gas_comp
 
 
-				if verbose:
-					print('Spread today: ', spread)
-					print('On or off: ', state)
-					print('Restart: ', restart)
-					print('Wait days: ', wait)
-					print('Profit today: ', state * (spread - restart[0] * 5 - 2) * self.capacity * 16)
-					print('After discount: ', state * (spread - restart[0] * 5 - 2) * self.capacity * 16 * exp(-discount * i/240))
-					print('Power Component: ', power_comp)
-					print('Gas Component: ', gas_comp)
-					print(' ')
+					if verbose:
+						print('Current count: ', count)
+						print('Current days passed: ', i - 20)
+						print('Spread today: ', spread)
+						print('On or off: ', state)
+						print('Restart: ', restart)
+						print('Wait days: ', wait)
+						print('Profit today: ', state * (spread - restart[0] * 5 - 2) * self.capacity * 16)
+						print('After discount: ', state * (spread - restart[0] * 5 - 2) * self.capacity * 16 * exp(-discount * i/240))
+						print('Power Component: ', power_comp)
+						print('Gas Component: ', gas_comp)
+						print(' ')
 
-				if wait > 0:
-					wait -= 1
+					if wait > 0:
+						wait -= 1
 
-				if restart[0] == 1:
-					restart[1] -= 1
-					if restart[1] == 0:
+					if restart[0] == 1:
+						restart[1] -= 1
+						if restart[1] == 0:
+							restart = [0, 0]
+
+					if state == 1 and spread <= self.threshold_off:
+						# Turn off the plant
+						state = 0
+						wait = 6
 						restart = [0, 0]
 
-				if state == 1 and spread <= self.threshold_off:
-					# Turn off the plant
-					state = 0
-					wait = 6
-					restart = [0, 0]
-
-				if state == 0 and wait == 0 and spread >= self.threshold_on:
-					# Turn on the plant
-					state = 1
-					restart = [1, 5]
+					if state == 0 and wait == 0 and spread >= self.threshold_on:
+						# Turn on the plant
+						state = 1
+						restart = [1, 5]
 
 			cashflow_list.append(path_cashflow)
 			undiscount_list.append(undiscount_cf)
@@ -152,18 +170,24 @@ class DispatchSimulator:
 		
 		n: number of path used in valuation
 		'''
+
 		result, _, power, _, gas, _  = self.dispatch(n)		
-		
-		# print(" ")
-		# print("Total:{}/{}, Power:{}/{}, Gas:{}/{}, Gas Min: {}".format(np.mean(result), np.std(result) / np.sqrt(n),
-		# 		np.mean(power), np.std(power) / np.sqrt(n),
-		# 		np.mean(gas), np.std(gas) / np.sqrt(n), np.min(gas)))
+		discount = [exp(-(self.r(i/240) + 0.02) * i/240) for i in range(240)]
+		fix_payment = np.mean(gas) / np.sum(discount)
+		fix_payment_std = np.std(gas) / np.sqrt(n) / np.sum(discount)
+
+		print(" ")
+		print("Total:{}/{}, Power:{}/{}, Gas:{}/{}, Gas Min: {}, Fix Pay: {}/{}".format(np.mean(result), np.std(result) / np.sqrt(n),
+				np.mean(power), np.std(power) / np.sqrt(n),
+				np.mean(gas), np.std(gas) / np.sqrt(n), np.min(gas),
+				fix_payment, fix_payment_std))
 
 		return (np.mean(result), np.std(result) / np.sqrt(n),
 				np.mean(power), np.std(power) / np.sqrt(n),
-				np.mean(gas), np.std(gas) / np.sqrt(n))
+				np.mean(gas), np.std(gas) / np.sqrt(n),
+				fix_payment, fix_payment_std)
 
 
-# if __name__ == '__main__':
-# 	sim = DispatchSimulator()
-# 	sim.value(500)
+if __name__ == '__main__':
+	sim = DispatchSimulator()
+	sim.value(10000)
