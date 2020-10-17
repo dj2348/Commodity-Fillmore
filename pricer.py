@@ -207,12 +207,15 @@ class PathGenerator:
         self.mc = MonteCarloSimulator(model_params, cur_mkt_val, maturity)
 
     def getPath(self, num_sim, asofdate=None, todate=None, spot=None):
+        default_cur_mkt_val = self.mc._cur_mkt_val
         if spot is not None:
             if len(spot) != 2:
                 raise ValueError("The spot argument should be a list of two values")
+
             self.mc._cur_mkt_val = spot
 
         history = self.mc.sim_path(num_sim=num_sim, asofdate=asofdate, todate=todate, use_fourier=True)
+        self.mc._cur_mkt_val = default_cur_mkt_val
         return history
 
 
