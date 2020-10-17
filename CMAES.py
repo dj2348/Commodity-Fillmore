@@ -56,7 +56,7 @@ loss_function(theta_e_grid, theta_g_grid)
 month_start = np.arange(0, 261)[::20] / 240
 discount_factors = np.exp(-month_start * pr.yield_curve(month_start))
 mu0 = np.append(theta_e_grid * discount_factors, theta_g_grid * discount_factors)
-
+''' 
 mu0 = np.array([95.77624878,  89.33899388,  94.97090706, 103.38369855,  94.94380183,
   81.75487088, 100.25696859,  93.62995212,  98.17644888,  99.3983192,
  102.46467819,  91.16151008,  84.44134567,  79.31319372 ,  9.43545258,
@@ -70,18 +70,19 @@ mu0 = np.array([95.76548345, 89.52283873, 95.35215501, 104.46874005, 94.6203973,
                 9.93164887, 10.68021599, 10.53612154, 10.75736881, 11.92659786,
                 10.16327577, 12.79479404, 9.80340575, 13.90669016, 9.79955108,
                 13.78518266, 6.879269, 6.98612125])     # 2.13
-
-sig0 = np.eye(28) * np.diag(np.append(np.linspace(4, 4, 14), np.linspace(4, 4, 14) / 8)) / 5
+'''
+sig0 = np.eye(28) * np.diag(np.append(np.linspace(4, 4, 14), np.linspace(4, 4, 14) / 8))
+''' 
 sig0 = np.eye(28) * np.diag(np.append(
                                 np.array([0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 4, 4, 4, 4, 4]),
                                 np.array([0, 0, 0, 4, 4, 4, 4,
-                                          0, 0, 0, 0, 0, 0, 0]) / 8
+                                          0, 0, 0, 0, 0, 0, 0])
                                 ))
-
+'''
 n_iter = 10000
-lam = 300           # num of new points
-k = 10             # num of elites
+lam = 50           # num of new points
+k = 5             # num of elites
 # start algo
 elite_losses = []
 mu, sig = mu0, sig0

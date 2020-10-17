@@ -88,19 +88,21 @@ class MonteCarloSimulator:
         self._model_params = model_params
         self._cur_mkt_val = cur_mkt_val
         self._maturity = maturity
-    
-    def sim_path(self, num_sim=10000, use_fourier=False):
+
+    def sim_path(self, num_sim=10000, asofdate=None, todate=None, use_fourier=False):
         def rolling_vol(i_day, mat, win_len, log_rv=False):
             if i_day + 1 < win_len:
                 if log_rv:
                     return np.sqrt(
-                    np.sum(np.diff(np.log(mat[:, 0:i_day]), axis=1) ** 2, axis=1) / (i_day + 1) * 250)  # Not sure here
+                        np.sum(np.diff(np.log(mat[:, 0:i_day]), axis=1) ** 2, axis=1) / (
+                                    i_day + 1) * 250)  # Not sure here
                 return np.sqrt(
                     np.sum(np.diff(mat[:, 0:i_day], axis=1) ** 2, axis=1) / (i_day + 1) * 250)  # Not sure here
             else:
                 if log_rv:
                     return np.sqrt(
-                    np.sum(np.diff(np.log(mat[:, i_day + 1 - win_len:i_day + 1]), axis=1) ** 2, axis=1) / win_len * 250)
+                        np.sum(np.diff(np.log(mat[:, i_day + 1 - win_len:i_day + 1]), axis=1) ** 2,
+                               axis=1) / win_len * 250)
                 return np.sqrt(
                     np.sum(np.diff(mat[:, i_day + 1 - win_len:i_day + 1], axis=1) ** 2, axis=1) / win_len * 250)
 
@@ -111,26 +113,33 @@ class MonteCarloSimulator:
         theta_e, theta_g = theta
         vol_e, vol_g = vol
 
-        T = self._maturity
+        # dates
+        if asofdate is None:
+            asofdate = 0
+        if todate is None:
+            todate = self._maturity
+
         delta_t = 1 / 240
-        n_steps = int(T / delta_t)
+        n_steps = todate - asofdate
         et = np.ones((num_sim, n_steps + 1)) * e0
         gt = np.ones((num_sim, n_steps + 1)) * g0
         Z1 = norm.rvs(size=num_sim * n_steps).reshape(num_sim, n_steps)
         Z2 = norm.rvs(size=num_sim * n_steps).reshape(num_sim, n_steps)
         B1 = rho * Z1 + np.sqrt(1 - rho ** 2) * Z2
 
+        curdate = asofdate
         for i in range(n_steps):
-            et[:, i + 1] = et[:, i] + alpha_e * (theta_e(i/240) - et[:, i]) * delta_t + \
+            curdate += 1
+            et[:, i + 1] = et[:, i] + alpha_e * (theta_e(curdate) - et[:, i]) * delta_t + \
                            rolling_vol(i, et, win_len, log_rv) * \
-                           ((et[:, i]-1)*log_rv + 1) * np.sqrt(delta_t) * Z1[:, i]
+                           ((et[:, i] - 1) * log_rv + 1) * np.sqrt(delta_t) * Z1[:, i]
             if use_fourier:
-                gt[:, i + 1] = gt[:, i] + alpha_g * (theta_g(i/240) - gt[:, i]) * \
-                               delta_t + vol_g(i/240) * np.sqrt(delta_t) * B1[:, i]
+                gt[:, i + 1] = gt[:, i] + alpha_g * (theta_g(curdate) - gt[:, i]) * \
+                               delta_t + vol_g(curdate / 240) * np.sqrt(delta_t) * B1[:, i]  # fourier use year as unit
             else:
-                gt[:, i + 1] = gt[:, i] + alpha_g * (theta_g(i / 240) - gt[:, i]) * delta_t + \
+                gt[:, i + 1] = gt[:, i] + alpha_g * (theta_g(curdate) - gt[:, i]) * delta_t + \
                                rolling_vol(i, gt, win_len, log_rv) * \
-                               ((gt[:, i]-1)*log_rv + 1) * np.sqrt(delta_t) * B1[:, i]
+                               ((gt[:, i] - 1) * log_rv + 1) * np.sqrt(delta_t) * B1[:, i]
             et[:, i + 1] = np.abs(et[:, i + 1])
             gt[:, i + 1] = np.abs(gt[:, i + 1])
         return et, gt
@@ -179,34 +188,54 @@ def yield_curve(t):
 
 class PathGenerator:
     def __init__(self):
-        month_start = np.arange(0, 261)[::20] / 240
-        mu = np.array([95.76548346, 89.52283876, 95.39370618, 104.46874004, 94.85219326,
-                  80.91702108, 100.14572397, 93.69413934, 100.28669654, 100.03896433,
-                  100.38118939, 96.23868527, 79.39360372, 77.12375787, 9.45413416,
-                  9.93164886, 10.65490518, 10.58251927, 10.78890507, 11.86661794,
-                  10.27026288, 12.79479409, 9.77392006, 13.9066902, 9.81835234,
-                  13.78518266, 6.97277494, 6.98612126])
-        theta_e_grid = mu[:14]
-        theta_g_grid = mu[14:]
+        month_start = np.arange(0, 261)[::20]
+        mu0 = np.array([95.76548345, 89.52283873, 95.35215501, 104.46874005, 94.6203973,
+                        80.91702108, 100.07035029, 93.69413937, 100.4471256, 100.71685473,
+                        99.78141199, 96.19445081, 79.62785258, 76.88922716, 9.45413411,
+                        9.93164887, 10.68021599, 10.53612154, 10.75736881, 11.92659786,
+                        10.16327577, 12.79479404, 9.80340575, 13.90669016, 9.79955108,
+                        13.78518266, 6.879269, 6.98612125])
+        theta_e_grid = mu0[:14]
+        theta_g_grid = mu0[14:]
         theta_e = interp1d(month_start, theta_e_grid, kind='linear')
         theta_g = interp1d(month_start, theta_g_grid, kind='linear')
 
         vol_g_fourier = VolGFourier()
         model_params = [np.array([theta_e, theta_g]), (None, vol_g_fourier), 20, True]
         cur_mkt_val = [82, 9.52]
-        maturity = 1 + 1 / 12
+        maturity = 260
         self.mc = MonteCarloSimulator(model_params, cur_mkt_val, maturity)
 
-    def getPath(self, num_sim):
-        history = self.mc.sim_path(num_sim=num_sim, use_fourier=True)
+    def getPath(self, num_sim, asofdate=None, todate=None, spot=None):
+        if spot is not None:
+            if len(spot) != 2:
+                raise ValueError("The spot argument should be a list of two values")
+            self.mc._cur_mkt_val = spot
+
+        history = self.mc.sim_path(num_sim=num_sim, asofdate=asofdate, todate=todate, use_fourier=True)
         return history
 
 
 if __name__ == '__main__':
     vol_g_fourier = VolGFourier()
-    vol_g_fourier.plotAgainstReal()
+    # vol_g_fourier.plotAgainstReal()
 
     pg = PathGenerator()
-    his = pg.getPath(10)
-
+    his = pg.getPath(10, asofdate=50, todate=100, spot=[80, 10])
+    plt.plot(his[0].T)
+    plt.show()
     print(0)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
