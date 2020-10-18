@@ -7,7 +7,7 @@ from pricer import *
 
 
 class DispatchSimulator:
-	def __init__(self, threshold_on=4, threshold_off=0, verbose=False):
+	def __init__(self, path=PathGenerator(), days=240, threshold_on=4, threshold_off=0, verbose=False):
 		'''
 		threshold_on: threshold for operating (from off to on), measured by spark spread
 		threshold_off: threshold for not operating (from on to off), measured by spark spread
@@ -46,11 +46,11 @@ class DispatchSimulator:
 		self.OAS_l = 0.02
 		
 		self.r = yield_curve
-		self.path = PathGenerator()
+		self.path = path
 
 		self.cost_share_ratio = 0.5
 
-		self.count_days = 240 # Subject to change
+		self.count_days = days
 
 		self.fixpayment = 367957.6702 
 		
@@ -113,7 +113,7 @@ class DispatchSimulator:
 					discount = self.r(i/240) + self.OAS_l
 
 					undiscount_cf = state * (spread - restart[0] * 5 - 2) * self.capacity * 16
-					variable_cost = state * (restart[0] * 5 + 2)
+					variable_cost = restart[0] * 5 + 2
 					power_comp = state * (power_path[n][i] - (1 - self.cost_share_ratio) * variable_cost) * self.capacity * 16
 					gas_comp = state * (- self.heatrate * gas_path[n][i] - self.cost_share_ratio * variable_cost) * self.capacity * 16  
 
@@ -177,7 +177,7 @@ class DispatchSimulator:
 				gas_list, gas_undist_list,
 				swap_matrix, swap_undist_matrix)
 	
-	def value(self, n):
+	def value(self, n, verbose=False):
 		'''
 		return the mean discounted value and associated std
 		of the plant cash flow under sub-optimal policy
@@ -190,16 +190,17 @@ class DispatchSimulator:
 		fix_payment = np.mean(gas) / np.sum(discount)
 		fix_payment_std = np.std(gas) / np.sqrt(n) / np.sum(discount)
 
-		print(" ")
-		print("Total:{}/{}, Power:{}/{}, Gas:{}/{}, Gas Min: {}, Fix Pay: {}/{}".format(np.mean(result), np.std(result) / np.sqrt(n),
-				np.mean(power), np.std(power) / np.sqrt(n),
-				np.mean(gas), np.std(gas) / np.sqrt(n), np.min(gas),
-				fix_payment, fix_payment_std))
+		if verbose:
+			print(" ")
+			print("Total:{}/{}, Power:{}/{}, Gas:{}/{}, Gas Min: {}, Fix Pay: {}/{}".format(np.mean(result), np.std(result) / np.sqrt(n),
+					np.mean(power), np.std(power) / np.sqrt(n),
+					np.mean(gas), np.std(gas) / np.sqrt(n), np.min(gas),
+					fix_payment, fix_payment_std))
 
 		return (np.mean(result), np.std(result) / np.sqrt(n),
 				np.mean(power), np.std(power) / np.sqrt(n),
 				np.mean(gas), np.std(gas) / np.sqrt(n),
-				fix_payment, fix_payment_std)
+				fix_payment, fix_payment_std, result, power, gas)
 
 
 if __name__ == '__main__':

@@ -9,8 +9,8 @@ from numpy.fft import fft
 
 
 class VolGFourier:
-    def __init__(self):
-        lam_gas = 4.4
+    def __init__(self, alpha_g=4.4, hypothetical_parallel_shift=0, hypothetical_multiplier=1):
+        lam_gas = alpha_g
         span = 120
         delta_t = 1 / 252
 
@@ -51,13 +51,15 @@ class VolGFourier:
         self.midtime = np.median(time)
         endtime = time.max()
         self.time_shift = time - endtime
+        self.h = hypothetical_parallel_shift
+        self.m = hypothetical_multiplier
 
     def __call__(self, x):
         fitted = 4
         for i in range(self.num_freq):
             fitted += 1 / self.num_freq * \
                       np.cos(2 * pi * (self.freq_[i]) * (x + self.midtime))
-        return fitted
+        return fitted * self.m + self.h
 
     def plotFreq(self):
         # frequency plot
@@ -76,10 +78,10 @@ class VolGFourier:
 
 
 class MonteCarloSimulator:
-    def __init__(self, model_params, cur_mkt_val, maturity):
+    def __init__(self, model_params, cur_mkt_val, maturity, alpha_e=5.2, alpha_g=4.4, rho=0.9):
         '''
-        model_params: theta (array of func of t, days. [theta_e, theta_g]), rho, alpha(array of size 2,
-        [alpha_e, alpha_g]), vol, win_len, log_rv
+        model_params: theta (array of func of t, days. [theta_e, theta_g]), vol(tuple of size 2,
+        (vol_e, vol_g)), win_len, log_rv
         cur_mkt_val: e0, g0
         maturity: T
         sim_info: num_sim, n_steps
@@ -88,6 +90,9 @@ class MonteCarloSimulator:
         self._model_params = model_params
         self._cur_mkt_val = cur_mkt_val
         self._maturity = maturity
+        self.alpha_e = alpha_e
+        self.alpha_g = alpha_g
+        self.rho = rho
 
     def sim_path(self, num_sim=10000, asofdate=None, todate=None, use_fourier=False):
         def rolling_vol(i_day, mat, win_len, log_rv=False):
@@ -108,8 +113,9 @@ class MonteCarloSimulator:
 
         e0, g0 = self._cur_mkt_val
         theta, vol, win_len, log_rv = self._model_params
-        alpha_e, alpha_g = 5.2, 4.4
-        rho = 0.9
+        alpha_e = self.alpha_e
+        alpha_g = self.alpha_g
+        rho = self.rho
         theta_e, theta_g = theta
         vol_e, vol_g = vol
 
@@ -185,27 +191,23 @@ def yield_curve(t):
                   0.0330, 0.0330, 0.0330, 0.0330, 0.0330])
     return interp1d(x, y, kind='cubic')(np.array([t]))[0]
 
-vol_fourier = VolGFourier()
+month_start = np.arange(0, 261)[::20]
+mu0 = np.array([95.76548345, 89.52283873, 95.35215501, 104.46874005, 94.6203973,
+                80.91702108, 100.07035029, 93.69413937, 100.4471256, 100.71685473,
+                99.78141199, 96.19445081, 79.62785258, 76.88922716, 9.45413411,
+                9.93164887, 10.68021599, 10.53612154, 10.75736881, 11.92659786,
+                10.16327577, 12.79479404, 9.80340575, 13.90669016, 9.79955108,
+                13.78518266, 6.879269, 6.98612125])
+theta_e_grid = mu0[:14]
+theta_g_grid = mu0[14:]
+theta_e = interp1d(month_start, theta_e_grid, kind='linear')
+theta_g = interp1d(month_start, theta_g_grid, kind='linear')
+vol_g_fourier = VolGFourier()
 
 class PathGenerator:
-    def __init__(self):
-        month_start = np.arange(0, 261)[::20]
-        mu0 = np.array([95.76548345, 89.52283873, 95.35215501, 104.46874005, 94.6203973,
-                        80.91702108, 100.07035029, 93.69413937, 100.4471256, 100.71685473,
-                        99.78141199, 96.19445081, 79.62785258, 76.88922716, 9.45413411,
-                        9.93164887, 10.68021599, 10.53612154, 10.75736881, 11.92659786,
-                        10.16327577, 12.79479404, 9.80340575, 13.90669016, 9.79955108,
-                        13.78518266, 6.879269, 6.98612125])
-        theta_e_grid = mu0[:14]
-        theta_g_grid = mu0[14:]
-        theta_e = interp1d(month_start, theta_e_grid, kind='linear')
-        theta_g = interp1d(month_start, theta_g_grid, kind='linear')
-
-        vol_g_fourier = vol_fourier
-        model_params = [np.array([theta_e, theta_g]), (None, vol_g_fourier), 20, True]
-        cur_mkt_val = [82, 9.52]
-        maturity = 260
-        self.mc = MonteCarloSimulator(model_params, cur_mkt_val, maturity)
+    def __init__(self, e0=82, g0=9.52, model_params=[np.array([theta_e, theta_g]), (None, vol_g_fourier), 20, True], maturity=260, alpha_e=5.2, alpha_g=4.4, rho=0.9):
+        cur_mkt_val = [e0, g0]
+        self.mc = MonteCarloSimulator(model_params, cur_mkt_val, maturity, alpha_e, alpha_g, rho)
 
     def getPath(self, num_sim, asofdate=None, todate=None, spot=None):
         default_cur_mkt_val = self.mc._cur_mkt_val
