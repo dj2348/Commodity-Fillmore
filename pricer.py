@@ -185,6 +185,7 @@ def yield_curve(t):
                   0.0330, 0.0330, 0.0330, 0.0330, 0.0330])
     return interp1d(x, y, kind='cubic')(np.array([t]))[0]
 
+vol_fourier = VolGFourier()
 
 class PathGenerator:
     def __init__(self):
@@ -200,7 +201,7 @@ class PathGenerator:
         theta_e = interp1d(month_start, theta_e_grid, kind='linear')
         theta_g = interp1d(month_start, theta_g_grid, kind='linear')
 
-        vol_g_fourier = VolGFourier()
+        vol_g_fourier = vol_fourier
         model_params = [np.array([theta_e, theta_g]), (None, vol_g_fourier), 20, True]
         cur_mkt_val = [82, 9.52]
         maturity = 260
@@ -224,7 +225,7 @@ if __name__ == '__main__':
     # vol_g_fourier.plotAgainstReal()
 
     pg = PathGenerator()
-    his = pg.getPath(10, asofdate=50, todate=100, spot=[80, 10])
+    his = pg.getPath(10, spot=[80, 10])
     plt.plot(his[0].T)
     plt.show()
     print(0)
