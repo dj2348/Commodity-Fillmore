@@ -73,7 +73,7 @@ class HedgingSimulator(DispatchSimulator):
             op_flag = count<=self.count_days
 
             cur_spread = path[:,i]
-            discount = self.r(i/240) + self.OAS_l
+            discount = self.r(i/240) - self.OAS_l
 
             # undiscount_cf = state*(cur_spread - restart[:,0]*5 - 2)*self.capacity*16
             variable_cost = restart[:,0]*5 + 2
@@ -172,17 +172,31 @@ if __name__== '__main__':
     # hedging_spread_futures = pd.read_excel(file_name, sheet_name="Spread Futures Component", index_col=0).values
     # hedging_gas_futures = pd.read_excel(file_name, sheet_name="Gas Futures Component", index_col=0).values
 
-    # Plan A
-    fixed_payment = 320000
-    discounted_fixed = np.ones(240)*fixed_payment
-    discount_vec = np.array([exp(-(hedge.r(i/240) + hedge.OAS_l)*i/240) for i in range(21, 261)])
-    cash -= discount_vec*fixed_payment
-    hedged_cash -= discount_vec *fixed_payment
+    # adjust discount rate
+    # ori_cash = cash.copy()
+    # ori_hedged_cash = hedged_cash.copy()
+    adjust_discount = np.array([exp((2*hedge.OAS_l)*i/240) for i in range(21, 261)])
+    cash *= adjust_discount
+    hedged_cash *= adjust_discount
+    hedging_spread_futures *= adjust_discount
+    hedging_gas_futures *= adjust_discount
+    # cash_ratio = np.sum(cash,axis=1)/np.sum(ori_cash,axis=1)
+    # hedged_cash_ratio = np.sum(hedged_cash,axis=1)/np.sum(ori_hedged_cash,axis=1)
+    # print(f'Cash:{np.mean(np.sum(cash,axis=1))}; Adjusted Cash:{np.mean(np.sum(ori_cash,axis=1))}')
+    # print(f'Cash Ratio:{np.mean(cash_ratio)}({np.std(cash_ratio)}); Hedged Cash Ratio:{np.mean(hedged_cash_ratio)}({np.std(hedged_cash_ratio)})')
+
+
+    # # Plan A
+    # fixed_payment = 350000
+    # discounted_fixed = np.ones(240)*fixed_payment
+    # discount_vec = np.array([exp(-(hedge.r(i/240) - hedge.OAS_l)*i/240) for i in range(21, 261)])
+    # cash -= discount_vec*fixed_payment
+    # hedged_cash -= discount_vec *fixed_payment
 
     # # Plan B
     # count = pd.DataFrame(cash).ne(0).iloc[:,::-1].idxmax(axis=1).values + 1
-    # fixed_payment = 300000
-    # discount_vec = np.array([exp(-(hedge.r(i/240)+hedge.OAS_l)*i/240) for i in range(21,261)])
+    # fixed_payment = 320000
+    # discount_vec = np.array([exp(-(hedge.r(i/240)-hedge.OAS_l)*i/240) for i in range(21,261)])
     # for i in range(n):
     #     cash[i,:count[i]] -= discount_vec[:count[i]]*fixed_payment
     #     hedged_cash[i,:count[i]] -= discount_vec[:count[i]]*fixed_payment
@@ -208,7 +222,7 @@ if __name__== '__main__':
 
     VaR_cash = np.percentile(total_cash, 5)
     VaR_hedged_cash = np.percentile(total_hedged_cash, 5)
-    print(f'95% VaR Unhedged:({VaR_cash}, Hedged:({VaR_hedged_cash})')
+    print(f'5% VaR Unhedged:({VaR_cash}, Hedged:({VaR_hedged_cash})')
 
     plt.figure(figsize=(12, 8))
     plt.title("Structure A Total PnL Distribution", size=16)
