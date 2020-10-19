@@ -9,13 +9,13 @@ from scipy.interpolate import CubicSpline, interp1d
 vol_g_fourier = VolGFourier()
 def loss_function(theta_e_grid, theta_g_grid):
 
-    month_start = np.arange(0, 261)[::20] / 240
+    month_start = np.arange(0, 261)[::20]
     theta_e = interp1d(month_start, theta_e_grid, kind='linear')
     theta_g = interp1d(month_start, theta_g_grid, kind='linear')
     model_params = [np.array([theta_e, theta_g]), (None, vol_g_fourier), 20, True]
     cur_mkt_val = [82, 9.52]
-    maturity = 1 + 1/12
-    num_sim = 10000
+    maturity = 260
+    num_sim = 100000
     model = pr.MonteCarloSimulator(model_params, cur_mkt_val, maturity)
     # history = model.rolling_vol_sim()
     history = model.sim_path(num_sim=num_sim, use_fourier=True)
@@ -50,7 +50,7 @@ theta_e_grid = np.array([82, 88.15, 98.35, 116, 124.4, 90.5, 86.25,
                            80.65, 86.05, 96, 97.2, 91.75, 80.8, 80.8])
 theta_g_grid = np.array([9.52, 9.79, 9.88, 9.97, 10.03, 10.05, 10.12,
                            10.4, 10.75, 10.97, 10.95, 10.71, 9.75, 9.75])
-loss_function(theta_e_grid, theta_g_grid)
+#loss_function(theta_e_grid, theta_g_grid)
 
 
 month_start = np.arange(0, 261)[::20] / 240
@@ -63,15 +63,15 @@ mu0 = np.array([95.77624878,  89.33899388,  94.97090706, 103.38369855,  94.94380
    9.72969004 , 10.75273553,  10.38411311,  10.85842813 , 11.78349431,
   10.25351524 , 12.55570602,   9.92906091 , 14.01353142 ,  9.30671949,
   14.28954042 ,  6.77069735 ,  6.87730178])
-
+'''
 mu0 = np.array([95.76548345, 89.52283873, 95.35215501, 104.46874005, 94.6203973,
                 80.91702108, 100.07035029, 93.69413937, 100.4471256, 100.71685473,
                 99.78141199, 96.19445081, 79.62785258, 76.88922716, 9.45413411,
                 9.93164887, 10.68021599, 10.53612154, 10.75736881, 11.92659786,
                 10.16327577, 12.79479404, 9.80340575, 13.90669016, 9.79955108,
                 13.78518266, 6.879269, 6.98612125])     # 2.13
-'''
-sig0 = np.eye(28) * np.diag(np.append(np.linspace(4, 4, 14), np.linspace(4, 4, 14) / 8))
+
+sig0 = np.eye(28) * np.diag(np.append(np.linspace(4, 4, 14), np.linspace(4, 4, 14) / 8)) * 0
 ''' 
 sig0 = np.eye(28) * np.diag(np.append(
                                 np.array([0, 0, 0, 0, 0, 0, 0,

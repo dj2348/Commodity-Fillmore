@@ -5,7 +5,7 @@ from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 from numpy import exp, sqrt, log, pi
 from numpy.fft import fft
-
+plt.style.use('seaborn')
 
 
 class VolGFourier:
@@ -41,6 +41,7 @@ class VolGFourier:
         y_imag = np.imag(y).squeeze()
         freq = np.fft.fftfreq(y.shape[0])
         self.y_real = y_real
+        self.y_imag = y_imag
         self.freq = freq
 
         self.num_freq = 10
@@ -61,17 +62,25 @@ class VolGFourier:
 
     def plotFreq(self):
         # frequency plot
-        plt.figure()
-        plt.plot(self.freq, self.y_real)
+        fig = plt.figure()
+        ax = fig.subplots(1, 1)
+        ax.plot(self.freq, self.y_real)
+        #ax.plot(-self.freq, self.y_real)
+        ax.set_xlabel('Frequency')
+        ax.set_ylabel('Magnitude')
         plt.show()
+        print(0)
 
     def plotAgainstReal(self):
         fig = plt.figure()
         ax = fig.subplots(1)
         x = np.linspace(-2, 1, 420)
         gas_hisvol_fitted = self(x)
-        plt.plot(self.time_shift, np.array(self.gas_hisvol['Vol']))
-        plt.plot(x, gas_hisvol_fitted)
+        ax.plot(self.time_shift, np.array(self.gas_hisvol['Vol']), label='Historical Volatility')
+        ax.plot(x, gas_hisvol_fitted, label='Fourier-fitted Volatility')
+        ax.set_ylabel('Vol')
+        ax.set_xlabel('Time (In Year)')
+        ax.legend()
         plt.show()
 
 
@@ -185,6 +194,9 @@ def yield_curve(t):
                   0.0330, 0.0330, 0.0330, 0.0330, 0.0330])
     return interp1d(x, y, kind='cubic')(np.array([t]))[0]
 
+def discountFactor():
+    pass
+
 vol_fourier = VolGFourier()
 
 class PathGenerator:
@@ -196,6 +208,8 @@ class PathGenerator:
                         9.93164887, 10.68021599, 10.53612154, 10.75736881, 11.92659786,
                         10.16327577, 12.79479404, 9.80340575, 13.90669016, 9.79955108,
                         13.78518266, 6.879269, 6.98612125])
+        self.mu0 = mu0
+        self.month_start = month_start
         theta_e_grid = mu0[:14]
         theta_g_grid = mu0[14:]
         theta_e = interp1d(month_start, theta_e_grid, kind='linear')
@@ -207,6 +221,14 @@ class PathGenerator:
         maturity = 260
         self.mc = MonteCarloSimulator(model_params, cur_mkt_val, maturity)
 
+        self.fut_e_true = [82, 88.15, 98.35, 116, 124.4, 90.5, 86.25,
+                                    80.65, 86.05, 96, 97.2, 91.75, 80.8]
+        self.fut_g_true = [9.6, 9.79, 9.88, 9.97, 10.03, 10.05, 10.12,
+                                        10.4, 10.75, 10.97, 10.95, 10.71, 9.75]
+        self.opt_e_true = np.array([3.54, 5.89, 9.62, 11.88, 8.95, 10.02,
+                               9.85, 10.65, 12.56, 13.36, 13.18, 9.32])
+        self.opt_g_true = np.array([0.39, 0.58, 0.73, 0.89, 1.07, 1.26,
+                               1.33, 1.43, 1.58, 1.73, 1.77, 1.42])
     def getPath(self, num_sim, asofdate=None, todate=None, spot=None):
         default_cur_mkt_val = self.mc._cur_mkt_val
         if spot is not None:
@@ -219,10 +241,74 @@ class PathGenerator:
         self.mc._cur_mkt_val = default_cur_mkt_val
         return history
 
+    def plotTheta(self):
+        fig = plt.figure()
+        ax = fig.subplots(1, 2)
+        ax[0].plot(self.month_start, self.mu0[:14], label='theta')
+        ax[0].plot(self.month_start[:-1], self.fut_e_true, label='Future Value')
+
+        ax[1].plot(self.month_start, self.mu0[14:], label='theta')
+        ax[1].plot(self.month_start[:-1], self.fut_g_true, label='Future Value')
+
+        ax[0].set_xlabel('Time (In Days)')
+        ax[1].set_xlabel('Time (In Days)')
+        ax[0].legend()
+        ax[1].legend()
+        plt.show()
+
+    def plotFit(self):
+        fut_e =[84.16331192, 86.79741196, 90.19948192, 94.09781279, 93.79258155,
+            91.28937909, 92.97645826, 94.03392333, 95.98087444, 97.58556865,
+                98.14824606, 96.44282908, 91.12070985]
+        fut_g = np.array([ 9.54085972,  9.68855255,  9.95504678, 10.15671575, 10.40649676,
+       10.71782192, 10.78345625, 11.10353357, 11.08606343, 11.52289723,
+       11.41826186, 11.54927442, 10.42382209])
+        opt_e =[ 3.43011329,  5.7128649 ,  9.81095221, 11.82101252,  8.80254261,
+        8.44014455,  9.79389105, 10.86672663, 12.57362373, 13.43435918,
+       13.06931849,  9.02885477]
+        opt_g =   [0.40024042, 0.58905734, 0.74745412, 0.86293246, 1.10839584,
+        1.16510821, 1.37049126, 1.37882179, 1.63048678, 1.67537459,
+         1.80756699, 1.35038729]
+        fig = plt.figure()
+        ax = fig.subplots(2, 2)
+        ax[0, 0].plot(self.month_start[:-1], fut_e, label='Fitted')
+        ax[0, 0].plot(self.month_start[:-1], self.fut_e_true, label='True')
+
+        ax[0, 1].plot(self.month_start[:-1], fut_g, label='Fitted')
+        ax[0, 1].plot(self.month_start[:-1], self.fut_g_true, label='True')
+
+
+        ax[1, 0].plot(self.month_start[1:-1], opt_e, label='Fitted')
+        ax[1, 0].plot(self.month_start[1:-1], self.opt_e_true, label='True')
+
+        ax[1, 1].plot(self.month_start[1:-1], opt_g, label='Fitted')
+        ax[1, 1].plot(self.month_start[1:-1], self.opt_g_true, label='True')
+
+
+        ax[0, 0].legend()
+        ax[0, 0].set_title('Fut e')
+        ax[0, 1].legend()
+        ax[0, 1].set_title('Fut g')
+        ax[1, 0].legend()
+        ax[1, 0].set_title('Opt e')
+        ax[1, 1].legend()
+        ax[1, 1].set_title('Opt g')
+        plt.show()
 
 if __name__ == '__main__':
-    vol_g_fourier = VolGFourier()
-    # vol_g_fourier.plotAgainstReal()
+    #vol_g_fourier = VolGFourier()
+    #vol_g_fourier.plotFreq()
+    #vol_g_fourier.plotAgainstReal()
+
+    fut_e_true = np.array([82, 88.15, 98.35, 116, 124.4, 90.5, 86.25,
+                       80.65, 86.05, 96, 97.2, 91.75, 80.8]) * 20
+    pg = PathGenerator()
+    his = pg.getPath(1000000)
+    fut_e, fut_g = futures(his)
+    payment_time = np.linspace(0, 1, 13)
+    rates = yield_curve(payment_time)
+    discount = exp(rates*(-payment_time))
+    (discount * fut_e * 20).sum()
 
     pg = PathGenerator()
     his = pg.getPath(10, spot=[80, 10])
