@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from scipy import stats
+import seaborn as sns
 import matplotlib.pyplot as plt
 import time
 import pickle
@@ -16,7 +17,7 @@ class HedgingSimulator(DispatchSimulator):
         self.cost_share_ratio = 0.5
         self.spread_short_threshold = 1
         self.spread_hedge_ratio = 20
-        self.count_days = 120
+        self.count_days = 240
 
     def near_futures_price(self, t, spot):
         '''
@@ -163,28 +164,66 @@ if __name__== '__main__':
     hedge = HedgingSimulator()
     cash, hedged_cash, hedging_spread_futures, hedging_gas_futures = hedge.hedging(n)
     end = time.time()
-    print(f'Hedging takes {end-start} s')
+
+    # # get data from stored file
+    # file_name = "dynamic_hedge_res_1000_cost.xlsx"
+    # cash = pd.read_excel(file_name, sheet_name="Unhedged Cash", index_col=0).values
+    # hedged_cash = pd.read_excel(file_name, sheet_name="Hedged Cash", index_col=0).values
+    # hedging_spread_futures = pd.read_excel(file_name, sheet_name="Spread Futures Component", index_col=0).values
+    # hedging_gas_futures = pd.read_excel(file_name, sheet_name="Gas Futures Component", index_col=0).values
+
+    # Plan A
+    fixed_payment = 320000
+    discounted_fixed = np.ones(240)*fixed_payment
+    discount_vec = np.array([exp(-(hedge.r(i/240) + hedge.OAS_l)*i/240) for i in range(21, 261)])
+    cash -= discount_vec*fixed_payment
+    hedged_cash -= discount_vec *fixed_payment
+
+    # # Plan B
+    # count = pd.DataFrame(cash).ne(0).iloc[:,::-1].idxmax(axis=1).values + 1
+    # fixed_payment = 300000
+    # discount_vec = np.array([exp(-(hedge.r(i/240)+hedge.OAS_l)*i/240) for i in range(21,261)])
+    # for i in range(n):
+    #     cash[i,:count[i]] -= discount_vec[:count[i]]*fixed_payment
+    #     hedged_cash[i,:count[i]] -= discount_vec[:count[i]]*fixed_payment
+
+    # print(f'Hedging takes {end-start} s')
     print(f'correlation of spread futures: {np.corrcoef(np.sum(cash,axis=1), np.sum(hedging_spread_futures, axis=1))}')
     print(f'correlation of gas futures: {np.corrcoef(np.sum(cash, axis=1), np.sum(hedging_gas_futures, axis=1))}')
     print(f'Unhedged Cashflow: {np.mean(np.sum(cash,axis=1))}({np.std(np.sum(cash,axis=1))/n**0.5})')
     print(f'Hedged Cashflow: {np.mean(np.sum(hedged_cash,axis=1))}({np.std(np.sum(hedged_cash,axis=1))/n**0.5})')
-    print(f'Probability of Positive PnL after Hedging: {np.mean(np.sum(hedged_cash,axis=1)>np.mean(np.sum(cash,axis=1)))}; before Hedging:{np.mean(np.sum(cash,axis=1)>np.mean(np.sum(cash,axis=1)))}')
+    print(f'Probability of Positive PnL after Hedging: {np.mean(np.sum(hedged_cash,axis=1)>0)}; before Hedging:{np.mean(np.sum(cash,axis=1)>0)}')
 
     total_cash = np.sum(cash,axis=1)
     total_hedged_cash = np.sum(hedged_cash,axis=1)
-    kde_cash = stats.gaussian_kde(total_cash)
-    kde_hedged_cash = stats.gaussian_kde(total_hedged_cash)
-    total_cash_x = np.linspace(min(total_cash),max(total_cash),1000)
-    total_hedged_cash_x = np.linspace(min(total_hedged_cash),max(total_hedged_cash),1000)
-    plt.plot(total_cash_x,kde_cash(total_cash_x),'r-')
-    plt.plot(total_hedged_cash_x,kde_hedged_cash(total_hedged_cash_x),'b-')
-    plt.hist([total_cash, total_hedged_cash], bins=20, density=True)
-    plt.legend(['cash density','hedged cash density','cash', 'hedged'])
+    # kde_cash = stats.gaussian_kde(total_cash)
+    # kde_hedged_cash = stats.gaussian_kde(total_hedged_cash)
+    # total_cash_x = np.linspace(min(total_cash),max(total_cash),1000)
+    # total_hedged_cash_x = np.linspace(min(total_hedged_cash),max(total_hedged_cash),1000)
+    # plt.plot(total_cash_x,kde_cash(total_cash_x),'r-')
+    # plt.plot(total_hedged_cash_x,kde_hedged_cash(total_hedged_cash_x),'b-')
+    # plt.hist([total_cash, total_hedged_cash], bins=20, density=True)
+    # plt.legend(['cash density','hedged cash density','cash', 'hedged'])
+    # plt.show()
+
+    VaR_cash = np.percentile(total_cash, 5)
+    VaR_hedged_cash = np.percentile(total_hedged_cash, 5)
+    print(f'95% VaR Unhedged:({VaR_cash}, Hedged:({VaR_hedged_cash})')
+
+    plt.figure(figsize=(12, 8))
+    plt.title("Structure A Total PnL Distribution", size=16)
+    sns.distplot(total_cash)
+    sns.distplot(total_hedged_cash)
+    plt.xlabel("Discounted Total PnL")
+    plt.axvline(VaR_cash, color='red', label='Unhedged 5% VaR')
+    plt.axvline(VaR_hedged_cash, color='blue', label='Hedged 5% VaR')
+    plt.legend(['Unhedged', 'Hedged', 'Unhedged 5% VaR', 'Hedged 5% VaR'])
     plt.show()
 
-    writer = pd.ExcelWriter('dynamic_hedge_res_1000_cost_120.xlsx', engine='xlsxwriter')
-    pd.DataFrame(cash).to_excel(writer, sheet_name='Unhedged Cash')
-    pd.DataFrame(hedged_cash).to_excel(writer, sheet_name='Hedged Cash')
-    pd.DataFrame(hedging_spread_futures).to_excel(writer, sheet_name='Spread Futures Component')
-    pd.DataFrame(hedging_gas_futures).to_excel(writer, sheet_name='Gas Futures Component')
-    writer.save()
+
+    # writer = pd.ExcelWriter('dynamic_hedge_res_1000_cost_120.xlsx', engine='xlsxwriter')
+    # pd.DataFrame(cash).to_excel(writer, sheet_name='Unhedged Cash')
+    # pd.DataFrame(hedged_cash).to_excel(writer, sheet_name='Hedged Cash')
+    # pd.DataFrame(hedging_spread_futures).to_excel(writer, sheet_name='Spread Futures Component')
+    # pd.DataFrame(hedging_gas_futures).to_excel(writer, sheet_name='Gas Futures Component')
+    # writer.save()
