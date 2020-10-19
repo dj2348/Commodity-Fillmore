@@ -85,6 +85,8 @@ class DispatchSimulator:
 		swap_matrix = np.array([[0 for i in range(240)] for n in range(len(path))])
 		swap_undist_matrix = np.array([[0 for i in range(240)] for n in range(len(path))])
 
+		count_list = []
+
 		for n in range(len(path)):
 			path_cashflow = 0
 			path_undist_cashflow = 0
@@ -105,7 +107,7 @@ class DispatchSimulator:
 
 			for i in range(21, len(path[n])):
 
-				if state == self.multiplier:
+				if count <= self.count_days and state == self.multiplier:
 					count += 1
 
 				if count <= self.count_days:
@@ -171,11 +173,13 @@ class DispatchSimulator:
 
 			gas_list.append(gas_cashflow)
 			gas_undist_list.append(gas_undist_cashflow)
+
+			count_list.append(count)
 			
 		return (cashflow_list, undiscount_list, 
 				power_list, power_undist_list, 
 				gas_list, gas_undist_list,
-				swap_matrix, swap_undist_matrix)
+				swap_matrix, swap_undist_matrix, count_list)
 	
 	def value(self, n, verbose=False):
 		'''
