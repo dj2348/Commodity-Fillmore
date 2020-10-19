@@ -77,8 +77,6 @@ class HedgingSimulator(DispatchSimulator):
 
             # undiscount_cf = state*(cur_spread - restart[:,0]*5 - 2)*self.capacity*16
             variable_cost = restart[:,0]*5 + 2
-            # power_comp = state*(power_path[:,i] - (1 - self.cost_share_ratio)*variable_cost)*self.capacity*16
-            # gas_comp = state*(- self.heatrate*gas_path[:,i] - self.cost_share_ratio*variable_cost)*self.capacity*16
 
             undiscount_cf = state*(self.heatrate*gas_path[:,i] + self.cost_share_ratio*variable_cost)*\
                             self.capacity*16
@@ -100,15 +98,12 @@ class HedgingSimulator(DispatchSimulator):
                     self.multiplier*self.capacity*16*self.heatrate*self.spread_hedge_ratio* \
                     (spread_futures[hedging_spread_position<0 & op_flag] - last_spread[hedging_spread_position<0 & op_flag])
                 # update hedging status
-                # target_hedging_status = np.array([state==self.multiplier, state==0]).T
                 target_hedging_status = state==0
                 hedging_status = target_hedging_status
                 hedging_spread_position[~target_hedging_status] = 0
                 hedging_spread_position[target_hedging_status] = 1
                 # change spread long position to short position if spread back to short threshold
                 hedging_spread_position[target_hedging_status & (cur_spread>self.spread_short_threshold)] = -1
-                # ## exit spread position if reaching cut loss level
-                # hedging_spread_position
 
                 # close out if reaching the last day of contract or preset cap
                 close_flag = np.ones(n).astype('int')*(i%20==0)|(count>=self.count_days)
@@ -153,8 +148,6 @@ class HedgingSimulator(DispatchSimulator):
             state[turn_on_flag] = self.multiplier
             restart[turn_on_flag, :] = [1, 5]
 
-        spread_futures_path = power_futures_path - gas_futures_path*self.heatrate
-
         return path_cashflow, path_hedging_cashflow, hedging_res, hedging_res_gas
 
 
@@ -164,27 +157,6 @@ if __name__== '__main__':
     hedge = HedgingSimulator()
     cash, hedged_cash, hedging_spread_futures, hedging_gas_futures = hedge.hedging(n)
     end = time.time()
-
-    # # get data from stored file
-    # file_name = "dynamic_hedge_res_1000_cost.xlsx"
-    # cash = pd.read_excel(file_name, sheet_name="Unhedged Cash", index_col=0).values
-    # hedged_cash = pd.read_excel(file_name, sheet_name="Hedged Cash", index_col=0).values
-    # hedging_spread_futures = pd.read_excel(file_name, sheet_name="Spread Futures Component", index_col=0).values
-    # hedging_gas_futures = pd.read_excel(file_name, sheet_name="Gas Futures Component", index_col=0).values
-
-    # adjust discount rate
-    # ori_cash = cash.copy()
-    # ori_hedged_cash = hedged_cash.copy()
-    adjust_discount = np.array([exp((2*hedge.OAS_l)*i/240) for i in range(21, 261)])
-    cash *= adjust_discount
-    hedged_cash *= adjust_discount
-    hedging_spread_futures *= adjust_discount
-    hedging_gas_futures *= adjust_discount
-    # cash_ratio = np.sum(cash,axis=1)/np.sum(ori_cash,axis=1)
-    # hedged_cash_ratio = np.sum(hedged_cash,axis=1)/np.sum(ori_hedged_cash,axis=1)
-    # print(f'Cash:{np.mean(np.sum(cash,axis=1))}; Adjusted Cash:{np.mean(np.sum(ori_cash,axis=1))}')
-    # print(f'Cash Ratio:{np.mean(cash_ratio)}({np.std(cash_ratio)}); Hedged Cash Ratio:{np.mean(hedged_cash_ratio)}({np.std(hedged_cash_ratio)})')
-
 
     # # Plan A
     # fixed_payment = 350000
@@ -210,15 +182,6 @@ if __name__== '__main__':
 
     total_cash = np.sum(cash,axis=1)
     total_hedged_cash = np.sum(hedged_cash,axis=1)
-    # kde_cash = stats.gaussian_kde(total_cash)
-    # kde_hedged_cash = stats.gaussian_kde(total_hedged_cash)
-    # total_cash_x = np.linspace(min(total_cash),max(total_cash),1000)
-    # total_hedged_cash_x = np.linspace(min(total_hedged_cash),max(total_hedged_cash),1000)
-    # plt.plot(total_cash_x,kde_cash(total_cash_x),'r-')
-    # plt.plot(total_hedged_cash_x,kde_hedged_cash(total_hedged_cash_x),'b-')
-    # plt.hist([total_cash, total_hedged_cash], bins=20, density=True)
-    # plt.legend(['cash density','hedged cash density','cash', 'hedged'])
-    # plt.show()
 
     VaR_cash = np.percentile(total_cash, 5)
     VaR_hedged_cash = np.percentile(total_hedged_cash, 5)
@@ -233,11 +196,3 @@ if __name__== '__main__':
     plt.axvline(VaR_hedged_cash, color='blue', label='Hedged 5% VaR')
     plt.legend(['Unhedged', 'Hedged', 'Unhedged 5% VaR', 'Hedged 5% VaR'])
     plt.show()
-
-
-    # writer = pd.ExcelWriter('dynamic_hedge_res_1000_cost_120.xlsx', engine='xlsxwriter')
-    # pd.DataFrame(cash).to_excel(writer, sheet_name='Unhedged Cash')
-    # pd.DataFrame(hedged_cash).to_excel(writer, sheet_name='Hedged Cash')
-    # pd.DataFrame(hedging_spread_futures).to_excel(writer, sheet_name='Spread Futures Component')
-    # pd.DataFrame(hedging_gas_futures).to_excel(writer, sheet_name='Gas Futures Component')
-    # writer.save()
